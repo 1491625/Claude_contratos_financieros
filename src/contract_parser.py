@@ -387,10 +387,28 @@ class ContractParser:
             contrato.plazo_meses = primer_tramo.plazo_meses
             contrato.frecuencia_pago = primer_tramo.frecuencia_pago
 
-        # Extraer cláusulas comunes (buscar después del último tramo)
-        texto_comun = texto.split("Cláusulas Comunes")[-1] if "Cláusulas Comunes" in texto else texto
-        contrato.garantias = self._extraer_garantias(texto_comun)
+        # Extraer garantías del texto completo
+        contrato.garantias = self._extraer_garantias(texto)
+
+        # Si no hay garantías en el texto principal, consolidar de tramos
+        if not contrato.garantias and contrato.tramos:
+            garantias_vistas = set()
+            for tramo in contrato.tramos:
+                for g in tramo.garantias:
+                    if g.descripcion not in garantias_vistas:
+                        contrato.garantias.append(g)
+                        garantias_vistas.add(g.descripcion)
+
         contrato.tipo_garantia_general = self._determinar_tipo_garantia(contrato.garantias)
+
+        # Extraer comisiones y prepago del texto completo
+        contrato.comisiones = self._extraer_comisiones(texto)
+        contrato.prepago = self._extraer_prepago(texto)
+
+        # Si no hay comisiones en el contrato principal, consolidar de tramos
+        if not contrato.comisiones and contrato.tramos:
+            for tramo in contrato.tramos:
+                contrato.comisiones.extend(tramo.comisiones)
 
         return contrato
 

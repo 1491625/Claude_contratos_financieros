@@ -169,8 +169,8 @@ class ContractParser:
             re.IGNORECASE
         )
         self.patron_cap_floor = re.compile(
-            r'(?:cap|techo)\s*(?:de\s*)?(\d+(?:\.\d+)?)\s*%|'
-            r'(?:floor|piso)\s*(?:de\s*)?(\d+(?:\.\d+)?)\s*%',
+            r'(?:cap|techo)\s*(?:\([^)]*\))?\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*%|'
+            r'(?:floor|piso)\s*(?:\([^)]*\))?\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*%',
             re.IGNORECASE
         )
 
@@ -192,16 +192,16 @@ class ContractParser:
 
         # Patrones de comisiones
         self.patron_comision_apertura = re.compile(
-            r'(?:comisión\s*(?:de\s*)?)?apertura\s*(?:del?\s*)?(\d+(?:\.\d+)?)\s*%',
+            r'(?:comisión\s*(?:de\s*)?)?apertura\s*(?:del?\s*)?(\d+(?:[.,]\d+)?)\s*%',
             re.IGNORECASE
         )
         self.patron_comision_mantenimiento = re.compile(
-            r'mantenimiento\s*(?:mensual\s*)?(?:del?\s*)?(\d+(?:\.\d+)?)\s*%',
+            r'mantenimiento\s*(?:mensual\s*)?(?:del?\s*)?(\d+(?:[.,]\d+)?)\s*%',
             re.IGNORECASE
         )
         self.patron_seguro = re.compile(
-            r'seguro\s*(?:de\s*(?:vida|crédito|multirriesgo|inmueble))?\s*'
-            r'(?:obligatorio\s*)?(?:por\s*)?[\$€]?\s*([\d,]+(?:\.\d{2})?)',
+            r'seguro\s*(?:de\s*)?(?:vida|crédito|multirriesgo|inmueble)?\s*'
+            r'(?:obligatorio\s*)?(?:por\s*)?[\$€]?\s*([\d,.]+)',
             re.IGNORECASE
         )
 
@@ -460,43 +460,54 @@ class ContractParser:
             'floor': None
         }
 
-        # Buscar tasa variable primero
-        match_variable = self.patron_tasa_variable.search(texto)
-        if match_variable:
-            resultado['tipo'] = TipoTasa.VARIABLE
+        # Determinar si es principalmente fija o variable
+        # Buscar patrones que indiquen tasa fija
+        es_principalmente_fija = bool(re.search(
+            r'\d+(?:[.,]\d+)?\s*%?\s*fija|'
+            r'tasa\s+fija|'
+            r'interés\s+(?:será\s+)?\d+(?:[.,]\d+)?\s*%\s*fija',
+            texto, re.IGNORECASE
+        ))
 
-            if match_variable.group(1):  # EURIBOR, TIIE, etc.
-                resultado['indice'] = match_variable.group(1).upper()
-                if match_variable.group(2):
-                    resultado['indice'] += f" {match_variable.group(2)}"
-
-                spread = match_variable.group(3)
-                if spread:
-                    resultado['spread'] = float(spread)
-                    # Convertir porcentaje a bps si es necesario
-                    if resultado['spread'] < 10:
-                        resultado['spread'] *= 100
-            elif match_variable.group(4):  # Solo puntos base
-                resultado['spread'] = float(match_variable.group(4))
+        # Buscar patrones que indiquen tasa variable como principal
+        es_principalmente_variable = bool(re.search(
+            r'^[^.]*tasa\s*(?:de\s*interés\s*)?(?:será\s*)?variable|'
+            r'2\.\s*Tasa[^.]*variable',
+            texto, re.IGNORECASE | re.MULTILINE
+        ))
 
         # Buscar tasa fija
         match_fija = self.patron_tasa_fija.search(texto)
         if match_fija:
-            tasa = float(match_fija.group(1))
-            # Si no encontramos variable, usar la fija
-            if resultado['tipo'] == TipoTasa.FIJA:
-                resultado['tasa'] = tasa
-            # Si la tasa es explícitamente fija
-            if 'fija' in texto.lower():
-                resultado['tipo'] = TipoTasa.FIJA
-                resultado['tasa'] = tasa
+            resultado['tasa'] = float(match_fija.group(1))
+
+        # Si es principalmente variable, buscar índice y spread
+        if es_principalmente_variable and not es_principalmente_fija:
+            resultado['tipo'] = TipoTasa.VARIABLE
+            match_variable = self.patron_tasa_variable.search(texto)
+            if match_variable:
+                if match_variable.group(1):  # EURIBOR, TIIE, etc.
+                    resultado['indice'] = match_variable.group(1).upper()
+                    if match_variable.group(2):
+                        resultado['indice'] += f" {match_variable.group(2)}"
+
+                    spread = match_variable.group(3)
+                    if spread:
+                        resultado['spread'] = float(spread)
+                        # Convertir porcentaje a bps si es necesario
+                        if resultado['spread'] < 10:
+                            resultado['spread'] *= 100
+                elif match_variable.group(4):  # Solo puntos base
+                    resultado['spread'] = float(match_variable.group(4))
 
         # Buscar cap y floor
         for match in self.patron_cap_floor.finditer(texto):
             if match.group(1):  # cap
-                resultado['cap'] = float(match.group(1))
+                valor = match.group(1).replace(',', '.')
+                resultado['cap'] = float(valor)
             if match.group(2):  # floor
-                resultado['floor'] = float(match.group(2))
+                valor = match.group(2).replace(',', '.')
+                resultado['floor'] = float(valor)
 
         return resultado
 
@@ -605,9 +616,10 @@ class ContractParser:
         # Comisión de apertura
         match = self.patron_comision_apertura.search(texto)
         if match:
+            valor_str = match.group(1).replace(',', '.')
             comisiones.append(Comision(
                 tipo="apertura",
-                valor=float(match.group(1)),
+                valor=float(valor_str),
                 es_porcentaje=True,
                 base="monto_principal",
                 descripcion="Comisión de apertura"
@@ -616,9 +628,10 @@ class ContractParser:
         # Comisión de mantenimiento
         match = self.patron_comision_mantenimiento.search(texto)
         if match:
+            valor_str = match.group(1).replace(',', '.')
             comisiones.append(Comision(
                 tipo="mantenimiento",
-                valor=float(match.group(1)),
+                valor=float(valor_str),
                 es_porcentaje=True,
                 base="saldo_insoluto",
                 descripcion="Comisión de mantenimiento mensual"

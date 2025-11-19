@@ -1,0 +1,58 @@
+{
+  "tasas_referencia": {
+    "por_tipo_empresa": {
+      "pyme": {
+        "corto_plazo": {"min": 12.0, "promedio": 15.0, "max": 20.0},
+        "mediano_plazo": {"min": 10.0, "promedio": 13.0, "max": 18.0},
+        "largo_plazo": {"min": 9.0, "promedio": 11.0, "max": 15.0}
+      },
+      "mediana": {
+        "corto_plazo": {"min": 9.0, "promedio": 12.0, "max": 16.0},
+        "mediano_plazo": {"min": 8.0, "promedio": 10.5, "max": 14.0},
+        "largo_plazo": {"min": 7.0, "promedio": 9.0, "max": 12.0}
+      },
+      "grande": {
+        "corto_plazo": {"min": 6.0, "promedio": 8.5, "max": 12.0},
+        "mediano_plazo": {"min": 5.5, "promedio": 7.5, "max": 10.0},
+        "largo_plazo": {"min": 5.0, "promedio": 6.5, "max": 9.0}
+      }
+    },
+    "por_sector": {
+      "manufacturero": {"spread_base": 0.5},
+      "servicios": {"spread_base": 0.75},
+      "tecnologia": {"spread_base": 1.0},
+      "comercial": {"spread_base": 0.25},
+      "construccion": {"spread_base": 1.25},
+      "energia": {"spread_base": 0.0}
+    },
+    "por_monto": {
+      "menor_100k": {"spread_adicional": 2.0},
+      "100k_500k": {"spread_adicional": 1.0},
+      "500k_1m": {"spread_adicional": 0.5},
+      "1m_10m": {"spread_adicional": 0.0},
+      "mayor_10m": {"spread_adicional": -0.5}
+    },
+    "por_plazo": {
+      "corto_plazo": {"meses_max": 12},
+      "mediano_plazo": {"meses_min": 13, "meses_max": 36},
+      "largo_plazo": {"meses_min": 37}
+    }
+  },
+  "indices_referencia": {
+    "EURIBOR_3M": {"valor_actual": 3.25, "tendencia": "estable"},
+    "EURIBOR_6M": {"valor_actual": 3.40, "tendencia": "estable"},
+    "TIIE_28": {"valor_actual": 11.00, "tendencia": "bajista"},
+    "LIBOR_3M": {"valor_actual": 5.35, "tendencia": "estable"},
+    "PRIME_RATE": {"valor_actual": 8.50, "tendencia": "estable"}
+  },
+  "comisiones_mercado": {
+    "apertura": {"min": 0.5, "promedio": 1.5, "max": 3.0},
+    "mantenimiento_mensual": {"min": 0.0, "promedio": 0.15, "max": 0.5},
+    "prepago": {"min": 0.0, "promedio": 1.0, "max": 3.0}
+  },
+  "metadata": {
+    "ultima_actualizacion": "2024-01-15",
+    "fuente": "Datos de referencia del mercado",
+    "moneda_base": "USD"
+  }
+}

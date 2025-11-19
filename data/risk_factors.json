@@ -1,0 +1,101 @@
+{
+  "pesos_garantias": {
+    "hipoteca_primer_grado": {"peso": 0.95, "descripcion": "Máxima seguridad"},
+    "hipoteca_segundo_grado": {"peso": 0.75, "descripcion": "Alta seguridad con riesgo de prelación"},
+    "prenda_equipos": {"peso": 0.60, "descripcion": "Depreciación del colateral"},
+    "prenda_inventarios": {"peso": 0.45, "descripcion": "Valor fluctuante"},
+    "aval_personal": {"peso": 0.30, "descripcion": "Depende de solvencia del avalista"},
+    "aval_corporativo": {"peso": 0.50, "descripcion": "Depende de solidez de la empresa"},
+    "sin_garantia": {"peso": 0.10, "descripcion": "Alto riesgo de recuperación"}
+  },
+  "benchmarks_covenants": {
+    "DSCR": {
+      "excelente": {"min": 1.50, "score": 100},
+      "bueno": {"min": 1.25, "max": 1.49, "score": 75},
+      "aceptable": {"min": 1.10, "max": 1.24, "score": 50},
+      "riesgoso": {"min": 1.00, "max": 1.09, "score": 25},
+      "critico": {"max": 0.99, "score": 0}
+    },
+    "deuda_ebitda": {
+      "excelente": {"max": 2.0, "score": 100},
+      "bueno": {"min": 2.1, "max": 3.0, "score": 75},
+      "aceptable": {"min": 3.1, "max": 4.0, "score": 50},
+      "riesgoso": {"min": 4.1, "max": 5.0, "score": 25},
+      "critico": {"min": 5.1, "score": 0}
+    }
+  },
+  "red_flags": {
+    "clausulas_aceleracion": {
+      "umbral_triggers": 5,
+      "descripcion": "Más de 5 triggers de aceleración indica riesgo operativo elevado",
+      "severidad": "alta"
+    },
+    "penalizacion_prepago": {
+      "umbral_porcentaje": 2.5,
+      "descripcion": "Penalización superior al 2.5% limita flexibilidad financiera",
+      "severidad": "media"
+    },
+    "tasa_vs_mercado": {
+      "umbral_spread": 3.0,
+      "descripcion": "Spread superior a 300 bps sobre mercado indica condiciones desfavorables",
+      "severidad": "alta"
+    },
+    "garantias_excesivas": {
+      "ratio_garantia_monto": 2.0,
+      "descripcion": "Garantías superiores al 200% del monto son desproporcionadas",
+      "severidad": "media"
+    },
+    "periodo_gracia_corto": {
+      "meses_minimo": 3,
+      "descripcion": "Menos de 3 meses de gracia puede generar presión de flujo inicial",
+      "severidad": "baja"
+    },
+    "cross_default": {
+      "presente": true,
+      "descripcion": "Cláusula de cross-default aumenta riesgo sistémico",
+      "severidad": "media"
+    }
+  },
+  "scoring_riesgo": {
+    "categorias": {
+      "liquidez": {"peso": 0.25, "descripcion": "Capacidad de pago según estructura"},
+      "tasa_interes": {"peso": 0.20, "descripcion": "Exposición a cambios de tasa"},
+      "operativo": {"peso": 0.20, "descripcion": "Restricciones operativas por covenants"},
+      "legal": {"peso": 0.15, "descripcion": "Riesgo por garantías y jurisdicción"},
+      "prepago": {"peso": 0.20, "descripcion": "Flexibilidad para amortización anticipada"}
+    },
+    "escala": {
+      "muy_bajo": {"min": 80, "max": 100, "color": "#22c55e"},
+      "bajo": {"min": 60, "max": 79, "color": "#84cc16"},
+      "moderado": {"min": 40, "max": 59, "color": "#eab308"},
+      "alto": {"min": 20, "max": 39, "color": "#f97316"},
+      "muy_alto": {"min": 0, "max": 19, "color": "#ef4444"}
+    }
+  },
+  "factores_ajuste": {
+    "multiples_tramos": {
+      "ajuste": -5,
+      "descripcion": "Complejidad adicional por múltiples tramos"
+    },
+    "tasa_variable_sin_cap": {
+      "ajuste": -15,
+      "descripcion": "Exposición ilimitada a subida de tasas"
+    },
+    "tasa_variable_con_cap": {
+      "ajuste": -5,
+      "descripcion": "Exposición limitada a subida de tasas"
+    },
+    "garantia_mixta": {
+      "ajuste": 5,
+      "descripcion": "Mejor cobertura con garantías diversificadas"
+    },
+    "informacion_trimestral": {
+      "ajuste": 3,
+      "descripcion": "Mayor transparencia y control"
+    }
+  },
+  "metadata": {
+    "version": "1.0",
+    "ultima_actualizacion": "2024-01-15"
+  }
+}

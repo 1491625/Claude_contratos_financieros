@@ -1,0 +1,938 @@
+# ============================================================================
+# DEFINICIÓN DE TASKS: Sistema de Análisis de Contratos
+# ============================================================================
+# Versión: 1.0
+# Fecha: 2025-12-01
+# Propósito: Definir flujo completo de tasks con expected outputs estructurados
+
+# ============================================================================
+# FLUJO DE TASKS
+# ============================================================================
+#
+# extract_contract_data
+#         ↓
+# validate_extraction (TEMPORAL)
+#         ↓
+# calculate_financial_metrics
+#         ↓
+# validate_calculations (TEMPORAL)
+#         ↓
+# evaluate_risks
+#         ↓
+# synthesize_report
+#         ↓
+# validate_final_report (TEMPORAL)
+#
+# ============================================================================
+
+tasks:
+
+  # ==========================================================================
+  # TASK 1: EXTRACCIÓN DE DATOS DEL CONTRATO
+  # ==========================================================================
+
+  extract_contract_data:
+
+    description: >
+      Extraer todos los datos financieros críticos del contrato de préstamo
+      proporcionado en formato de texto.
+
+      INPUT:
+      {contract_text}  # Texto completo del contrato extraído del PDF
+
+      PROCESO DETALLADO:
+
+      1. LECTURA COMPLETA:
+         - Leer el texto completo antes de extraer
+         - Identificar estructura del contrato
+         - Determinar si es simple o multi-tramo
+
+      2. EXTRACCIÓN DE PARTES (prestamista, prestatario):
+         - Buscar secciones con nombres legales completos
+         - Asignar confidence_score por campo
+         - SI no encuentras: marcar como "No encontrado" con confidence 0.0
+
+      3. EXTRACCIÓN DE DATOS FINANCIEROS TIER 1:
+         Para cada campo crítico (monto, moneda, tasa, plazo, tipo_tasa):
+         - Buscar palabras clave del campo
+         - Verificar formato contra especificación exacta
+         - Normalizar al formato estándar
+         - Citar fragmento textual como evidencia
+         - Asignar confidence_score honesto
+         - SI no encuentras O es ambiguo: marcar explícitamente
+
+      4. EXTRACCIÓN DE DATOS TIER 2 y 3:
+         - Frecuencia de pago, garantías, comisiones, prepago, covenants
+         - Seguir mismo proceso que Tier 1
+         - Estos pueden tener confidence más bajo
+
+      5. DETECCIÓN DE CLÁUSULAS ESPECIALES:
+         - Periodo de gracia, bullet, cap/floor
+         - Cross-default, múltiples triggers
+
+      6. VALIDACIÓN PRE-RESPUESTA:
+         VERIFICAR antes de responder:
+         ☐ Todos los campos Tier 1 tienen valor O "No encontrado"
+         ☐ Cada campo extraído tiene confidence_score
+         ☐ Cada campo extraído tiene text_evidence
+         ☐ Formato de datos numéricos cumple especificación
+         ☐ No hay contradicciones (ej: tasa fija con spread)
+
+      PROHIBIDO:
+      - NO inventar datos faltantes
+      - NO usar lenguaje especulativo ("probablemente", "tal vez")
+      - NO asumir valores "típicos" sin documentar como assumption
+      - NO copiar valores entre campos sin justificación
+
+    expected_output: >
+      JSON estructurado con el siguiente schema exacto:
+
+      {
+        "extraction_metadata": {
+          "extraction_date": "ISO 8601 timestamp",
+          "contract_type": "simple | multi_tranche",
+          "confidence_score_avg": 0.85,  // promedio de todos los campos
+          "fields_extracted": 12,
+          "fields_not_found": 3,
+          "requires_manual_review": false,
+          "warnings": ["Lista de advertencias si hay datos ambiguos"]
+        },
+
+        "contract_parties": {
+          "lender": {
+            "value": "Nombre legal completo o null",
+            "confidence": 0.0 a 1.0,
+            "text_evidence": "Cita exacta del contrato",
+            "note": "Observaciones si aplica"
+          },
+          "borrower": {
+            "value": "Nombre legal completo o null",
+            "confidence": 0.0 a 1.0,
+            "text_evidence": "Cita exacta del contrato",
+            "note": "Observaciones si aplica"
+          }
+        },
+
+        "financial_terms": {
+          "principal_amount": {
+            "value": 1000000.00,  // número decimal SIN símbolos
+            "confidence": 1.0,
+            "text_evidence": "Cita del contrato"
+          },
+          "currency": {
+            "value": "USD",  // código ISO 4217
+            "confidence": 1.0,
+            "text_evidence": "Cita del contrato"
+          },
+          "interest_rate": {
+            "type": "fixed | variable",
+            "rate": 8.50,  // porcentaje decimal
+            "confidence_type": 1.0,
+            "confidence_rate": 1.0,
+            "text_evidence": "Cita del contrato",
+            // Para tasa variable:
+            "index": "TIIE | EURIBOR | LIBOR | null",
+            "spread_bps": 250,  // puntos base o null
+            "cap": 12.0,  // porcentaje o null
+            "floor": 3.0  // porcentaje o null
+          },
+          "term_months": {
+            "value": 36,  // entero
+            "confidence": 1.0,
+            "text_evidence": "Cita del contrato"
+          },
+          "payment_frequency": {
+            "value": "monthly | quarterly | semiannual | annual | bullet",
+            "confidence": 1.0,
+            "text_evidence": "Cita del contrato"
+          }
+        },
+
+        "special_features": {
+          "grace_period_months": {
+            "value": 0,  // entero, 0 si no hay
+            "confidence": 1.0
+          },
+          "is_bullet": {
+            "value": false,
+            "confidence": 1.0
+          },
+          "prepayment": {
+            "allowed": true,
+            "penalty_percentage": 2.0,  // 0.0 si no hay penalización
+            "penalty_period_months": 18,
+            "confidence": 0.9,
+            "text_evidence": "Cita del contrato"
+          }
+        },
+
+        "guarantees": {
+          "found": true,
+          "type_general": "real | personal | mixta | none",
+          "items": [
+            {
+              "type": "hipoteca | prenda | aval | fianza",
+              "description": "Descripción específica",
+              "text_evidence": "Cita del contrato"
+            }
+          ],
+          "confidence": 0.95
+        },
+
+        "commissions": {
+          "found": true,
+          "items": [
+            {
+              "type": "apertura | mantenimiento | seguro",
+              "value": 2.0,  // porcentaje o monto fijo
+              "is_percentage": true,
+              "base": "principal_amount | monthly_balance",
+              "text_evidence": "Cita del contrato"
+            }
+          ],
+          "confidence": 0.90
+        },
+
+        "covenants": {
+          "found": true,
+          "items": [
+            {
+              "type": "DSCR | Deuda/EBITDA | Negative Pledge | Otro",
+              "value": 1.25,  // valor numérico si aplica
+              "description": "Descripción completa",
+              "text_evidence": "Cita del contrato"
+            }
+          ],
+          "confidence": 0.85
+        },
+
+        "default_clauses": {
+          "found": true,
+          "has_cross_default": false,
+          "items": [
+            {
+              "type": "Descripción del trigger",
+              "text_evidence": "Cita del contrato"
+            }
+          ],
+          "confidence": 0.80
+        },
+
+        "fields_not_found": [
+          "Lista de campos que NO se pudieron extraer"
+        ],
+
+        "ambiguous_fields": [
+          {
+            "field": "nombre_campo",
+            "reason": "Por qué es ambiguo",
+            "possible_values": ["valor1", "valor2"],
+            "requires_clarification": true
+          }
+        ]
+      }
+
+      IMPORTANTE:
+      - Usar null para campos no encontrados (NO strings vacíos)
+      - Confidence debe reflejar certeza REAL, no inflado
+      - Text_evidence debe ser cita EXACTA del contrato
+      - Formato de números EXACTO según especificación
+
+    agent: contract_data_extractor
+
+    output_file: "outputs/extracted_data.json"
+
+  # ==========================================================================
+  # TASK 2: VALIDACIÓN DE EXTRACCIÓN (TEMPORAL - Solo desarrollo)
+  # ==========================================================================
+
+  validate_extraction:
+
+    description: >
+      Validar la precisión y ausencia de alucinaciones en la extracción de
+      datos del contrato. Comparar extracted_data.json contra el texto
+      original del contrato en los 5 niveles de validación jerárquica.
+
+      INPUT:
+      - {contract_text}  # Texto original del contrato
+      - extracted_data.json  # Output de task anterior
+
+      PROCESO:
+
+      Ejecutar validación en 5 niveles:
+      1. Formato y estructura del JSON
+      2. Datos contra fuente (verificar text_evidence)
+      3. No aplica (no hay cálculos aún)
+      4. No aplica (solo hay 1 agente hasta ahora)
+      5. Señales de alucinación
+
+      Generar reporte PASS/FAIL con evidencia específica de cualquier problema.
+
+    expected_output: >
+      Reporte markdown estructurado siguiendo el formato:
+
+      # REPORTE DE VALIDACIÓN: Extracción de Datos
+
+      ## RESUMEN EJECUTIVO
+      Estado: APROBADO / REVISAR / RECHAZADO
+      Puntuación: X/5 niveles PASS
+      Confianza: 0.95
+
+      ## NIVEL 1: FORMATO
+      Estado: PASS / FAIL
+      [Detalles]
+
+      ## NIVEL 2: DATOS CONTRA FUENTE
+      Estado: PASS / FAIL
+      Discrepancias: [lista con ejemplos]
+
+      ## NIVEL 5: SEÑALES ALUCINACIÓN
+      Estado: PASS / FAIL
+      Señales detectadas: [lista con evidencia]
+
+      ## DECISIÓN FINAL
+      [Veredicto con justificación]
+
+    agent: quality_inspector
+
+    context:
+      - extract_contract_data
+
+    output_file: "outputs/validation_extraction.md"
+
+    # NOTA: Desactivar esta task en producción
+
+  # ==========================================================================
+  # TASK 3: CÁLCULOS FINANCIEROS
+  # ==========================================================================
+
+  calculate_financial_metrics:
+
+    description: >
+      Calcular todas las métricas financieras del préstamo con precisión >99%.
+
+      INPUT:
+      extracted_data.json  # Output de extract_contract_data
+
+      PROCESO DETALLADO:
+
+      1. VALIDACIÓN DE INPUT (CHECKPOINT CRÍTICO):
+         Verificar que extracted_data.json contiene todos los campos Tier 1:
+         - principal_amount
+         - currency
+         - interest_rate.rate
+         - interest_rate.type
+         - term_months
+         - payment_frequency
+
+         SI falta alguno: DETENER y generar error_report
+         NO continuar con datos incompletos
+
+      2. DETERMINACIÓN DE ESTRUCTURA:
+         Analizar parámetros para identificar tipo de amortización:
+         - Francesa (cuota fija)
+         - Bullet (capital al final)
+         - Con período de gracia
+
+      3. CÁLCULO DE TASA MENSUAL:
+         tasa_mensual = (tasa_nominal / 100) / periodos_por_año
+         Mantener precisión completa (no redondear)
+
+      4. GENERACIÓN DE TABLA DE AMORTIZACIÓN:
+         Para cada período 1 a term_months:
+         - Calcular interés del período
+         - Calcular capital del período
+         - Calcular saldo nuevo
+         - Calcular comisiones si aplica
+         - Validar: cuota = capital + interés (±$0.01)
+
+      5. CÁLCULO DE TOTALES:
+         - Sumar todos los intereses
+         - Sumar todas las comisiones
+         - Validar: Σ capital == principal (±$1.00)
+         - Validar: saldo_final == 0.00 (±$1.00)
+
+      6. CÁLCULO DE MÉTRICAS CLAVE:
+         - TEA: ((1 + r/n)^n - 1) * 100
+         - CAT: ((total_cost / principal) - 1) / años * 100
+         - TIR: Usando flujos de caja
+         - VPN: Descontando flujos
+
+      7. COMPARACIÓN CON MERCADO:
+         - Leer market_rates.json
+         - Determinar perfil (tipo empresa, plazo)
+         - Calcular diferencia vs promedio
+         - Clasificar evaluación
+
+      8. ANÁLISIS DE SENSIBILIDAD (si tasa variable):
+         - Generar escenarios [-2%, -1%, 0%, +1%, +2%]
+         - Aplicar cap y floor si existen
+         - Recalcular tabla e intereses por escenario
+
+      9. VALIDACIÓN PRE-RESPUESTA:
+         VERIFICAR antes de responder:
+         ☐ Tabla amortización suma correctamente
+         ☐ Saldo final = 0.00
+         ☐ CAT y TEA en rangos razonables
+         ☐ Todas las fórmulas documentadas
+         ☐ Todos los decimales con 2 posiciones
+
+      PROHIBIDO:
+      - NO proceder con datos inválidos
+      - NO hacer suposiciones no documentadas
+      - NO generar output con errores matemáticos >0.1%
+
+    expected_output: >
+      JSON con el siguiente schema:
+
+      {
+        "calculation_metadata": {
+          "calculation_date": "ISO timestamp",
+          "amortization_type": "french | bullet | with_grace",
+          "interest_calculation_method": "monthly_compound",
+          "precision": "0.01",
+          "validation_status": "PASS | FAIL"
+        },
+
+        "input_validation": {
+          "status": "VALID | INVALID",
+          "checks_passed": 6,
+          "checks_failed": 0,
+          "warnings": []
+        },
+
+        "amortization_table": [
+          {
+            "period": 1,
+            "date": "2026-01-01",
+            "opening_balance": 1000000.00,
+            "payment": 32341.42,
+            "principal": 31508.09,
+            "interest": 833.33,
+            "maintenance_commission": 0.00,
+            "closing_balance": 968491.91
+          }
+          // ... resto de períodos
+        ],
+
+        "summary_totals": {
+          "total_payments": 1164291.00,
+          "total_principal": 1000000.00,
+          "total_interest": 143291.00,
+          "total_commissions": 21000.00,
+          "total_financing_cost": 1164291.00
+        },
+
+        "key_metrics": {
+          "monthly_payment": {
+            "value": 32341.42,
+            "formula": "PMT(rate, nper, pv)",
+            "note": "Cuota fija para estructura francesa"
+          },
+          "cat_costo_anual_total": {
+            "value": 10.20,
+            "formula": "((total_cost / principal) - 1) / years * 100",
+            "components": {
+              "principal": 1000000.00,
+              "interest": 143291.00,
+              "commissions": 21000.00
+            }
+          },
+          "tea_tasa_efectiva_anual": {
+            "value": 8.84,
+            "formula": "((1 + nominal_rate/12)^12 - 1) * 100"
+          },
+          "tir_anual": {
+            "value": 11.55,
+            "note": "TIR desde perspectiva del prestatario"
+          },
+          "vpn": {
+            "value": -164291.00,
+            "discount_rate": 8.50,
+            "note": "VPN negativo indica costo neto"
+          }
+        },
+
+        "market_comparison": {
+          "loan_profile": {
+            "company_type": "pyme | mediana | grande",
+            "term_type": "corto_plazo | mediano_plazo | largo_plazo"
+          },
+          "market_reference": {
+            "average_rate": 9.50,
+            "min_rate": 7.00,
+            "max_rate": 12.00
+          },
+          "comparison": {
+            "difference_vs_market": -0.66,
+            "percentile": 40,
+            "evaluation": "Competitivo - Por debajo del mercado"
+          }
+        },
+
+        "sensitivity_analysis": {
+          // Solo si es tasa variable
+          "scenarios": [
+            {
+              "rate_change": "-2.0%",
+              "resulting_rate": 6.50,
+              "average_payment": 31200.00,
+              "total_interest": 123000.00,
+              "impact_vs_base": -20291.00
+            }
+            // ... otros escenarios
+          ],
+          "has_cap": true,
+          "has_floor": false,
+          "cap_value": 12.0,
+          "floor_value": null,
+          "reference_index": "TIIE"
+        },
+
+        "assumptions": [
+          "Fecha de inicio asumida: 2025-12-01",
+          "Pagos mensuales exactos cada 30 días",
+          "Sin prepagos durante el plazo"
+        ],
+
+        "formulas_used": [
+          "Cuota fija: PMT = P * [r*(1+r)^n] / [(1+r)^n - 1]",
+          "TEA: ((1 + r_nominal/12)^12 - 1) * 100",
+          "CAT: ((costo_total / principal) - 1) / años * 100"
+        ]
+      }
+
+      SI HAY ERROR CRÍTICO (datos inválidos):
+      {
+        "status": "ERROR",
+        "error_type": "INVALID_INPUT",
+        "error_message": "Descripción clara",
+        "failed_field": "campo_específico",
+        "recommendation": "Acción para corregir",
+        "cannot_proceed": true
+      }
+
+    agent: financial_calculator
+
+    context:
+      - extract_contract_data
+
+    output_file: "outputs/financial_calculations.json"
+
+  # ==========================================================================
+  # TASK 4: VALIDACIÓN DE CÁLCULOS (TEMPORAL)
+  # ==========================================================================
+
+  validate_calculations:
+
+    description: >
+      Validar precisión matemática de los cálculos financieros.
+
+      INPUT:
+      - extracted_data.json
+      - financial_calculations.json
+
+      PROCESO:
+
+      Ejecutar validación en niveles relevantes:
+      1. Formato del JSON
+      2. Datos coinciden con extracted_data
+      3. Cálculos matemáticos correctos (recalcular muestreo)
+      4. Coherencia entre datos de entrada y cálculos
+      5. Señales de invención de datos
+
+      Generar reporte PASS/FAIL con detalles de cualquier error.
+
+    expected_output: >
+      Reporte markdown siguiendo formato estándar de validación.
+
+    agent: quality_inspector
+
+    context:
+      - extract_contract_data
+      - calculate_financial_metrics
+
+    output_file: "outputs/validation_calculations.md"
+
+  # ==========================================================================
+  # TASK 5: EVALUACIÓN DE RIESGOS
+  # ==========================================================================
+
+  evaluate_risks:
+
+    description: >
+      Evaluar riesgos del contrato en 5 categorías con scoring 0-100.
+
+      INPUT:
+      - extracted_data.json
+      - financial_calculations.json
+
+      PROCESO DETALLADO:
+
+      1. PREPARACIÓN:
+         - Cargar risk_factors.json
+         - Verificar que tienes ambos inputs completos
+         - Extraer datos necesarios para evaluación
+
+      2. EVALUACIÓN POR CATEGORÍA (Scoring 0-100):
+
+         A) LIQUIDEZ (Peso 25%):
+            Score inicial: 100
+            Aplicar penalizaciones/bonificaciones:
+            - Ratio cuota/monto anual
+            - Estructura bullet
+            - Período de gracia
+            - Frecuencia de pagos
+            - Plazo
+            Documentar cada ajuste con razón
+
+         B) TASA (Peso 20%):
+            - Tipo de tasa (fija vs variable)
+            - Nivel vs mercado
+            - Spread para variables
+            - Presencia de cap/floor
+
+         C) OPERATIVO (Peso 20%):
+            - Número de covenants
+            - Severidad de covenants
+            - Cláusulas de incumplimiento
+            - Cross-default
+
+         D) LEGAL (Peso 15%):
+            - Tipo de garantía
+            - Grado de hipoteca
+            - Cantidad de garantías
+            - Jurisdicción
+
+         E) PREPAGO (Peso 20%):
+            - Prepago permitido
+            - Penalización
+            - Período de penalización
+
+      3. IDENTIFICACIÓN DE RED FLAGS:
+         Evaluar criterios específicos:
+         - Tasa muy elevada (>3% sobre mercado)
+         - Triggers excesivos (>5)
+         - Penalización prepago alta (>2.5%)
+         - Tasa variable sin cap
+         - Sobrecolateralización
+         - Cross-default
+         - CAT muy elevado (>30%)
+         - Comisiones altas
+
+      4. CÁLCULO DE SCORE TOTAL:
+         - Score ponderado de categorías
+         - Aplicar impacto de red flags
+         - Determinar nivel de riesgo
+
+      5. ANÁLISIS CUALITATIVO:
+         - Identificar fortalezas
+         - Identificar debilidades
+         - Sugerir puntos de negociación (top 5)
+
+      6. GENERACIÓN DE RECOMENDACIÓN:
+         Aplicar reglas de decisión:
+         - SI score >= 70 Y red_flags_críticos == 0: "Aceptar"
+         - SI score >= 50 O (score >= 40 Y red_flags <= 1): "Negociar"
+         - SI score < 40 O red_flags_críticos > 2: "Rechazar"
+
+      7. VALIDACIÓN PRE-RESPUESTA:
+         ☐ Scores en rango 0-100
+         ☐ Recomendación alineada con score
+         ☐ Cada red flag tiene evidencia
+         ☐ Puntos negociación son accionables
+
+      PROHIBIDO:
+      - NO asignar scores sin justificación
+      - NO recomendar "Aceptar" si score <40
+      - NO listar red flags sin evidencia
+      - NO sugerir negociación genérica
+
+    expected_output: >
+      JSON con el siguiente schema:
+
+      {
+        "risk_assessment": {
+          "assessment_date": "ISO timestamp",
+          "score_total": 72,
+          "risk_level": "muy_bajo | bajo | moderado | alto | muy_alto",
+
+          "category_scores": [
+            {
+              "category": "Liquidez",
+              "score": 85,
+              "level": "bajo",
+              "factors": [
+                "Pagos mensuales distribuyen bien el flujo",
+                "Plazo adecuado de 36 meses"
+              ],
+              "weight": 0.25,
+              "adjustments_applied": [
+                {"type": "bonus", "amount": 5, "reason": "Pagos mensuales"}
+              ]
+            }
+            // ... otras 4 categorías
+          ],
+
+          "red_flags": [
+            {
+              "type": "tasa_elevada",
+              "description": "Tasa 5.0% superior al mercado",
+              "severity": "alta | media | baja | critica",
+              "impact_score": -15,
+              "recommendation": "Solicitar revisión de tasa",
+              "evidence": "TEA: 15.0%, Mercado: 10.0%"
+            }
+            // ... otros red flags
+          ],
+
+          "strengths": [
+            "Tasa competitiva bajo mercado",
+            "Flexibilidad de prepago sin penalización"
+          ],
+
+          "weaknesses": [
+            "Requiere garantía hipotecaria",
+            "Penalización de prepago del 2.0%"
+          ],
+
+          "negotiation_points": [
+            "Reducir penalización de prepago del 2.0% al 1.0%",
+            "Eliminar requisito de garantía hipotecaria",
+            "Reducir comisión de apertura al 1.5%"
+          ],
+
+          "recommendation_general": "El contrato presenta condiciones...",
+
+          "strategic_action": "Aceptar | Negociar | Rechazar",
+
+          "reasoning": {
+            "score_justification": "Score de 72/100 refleja...",
+            "decision_logic": "Score >=70 Y sin red flags críticos → Aceptar",
+            "key_factors": [
+              "Tasa competitiva",
+              "Flexibilidad de prepago",
+              "Ausencia de covenants restrictivos"
+            ]
+          }
+        }
+      }
+
+    agent: risk_evaluator
+
+    context:
+      - extract_contract_data
+      - calculate_financial_metrics
+
+    output_file: "outputs/risk_assessment.json"
+
+  # ==========================================================================
+  # TASK 6: SÍNTESIS DE REPORTE
+  # ==========================================================================
+
+  synthesize_report:
+
+    description: >
+      Sintetizar todos los análisis previos en un reporte ejecutivo profesional.
+
+      INPUT:
+      - extracted_data.json
+      - financial_calculations.json
+      - risk_assessment.json
+
+      PROCESO DETALLADO:
+
+      1. VALIDACIÓN DE INPUTS:
+         Verificar que tienes los 3 JSONs completos
+         SI falta alguno: DETENER
+
+      2. GENERACIÓN DE RESUMEN EJECUTIVO (3 párrafos):
+         - Párrafo 1: Contexto del contrato (partes, monto, plazo, tasa)
+         - Párrafo 2: Costo y comparación (CAT, TEA, vs mercado)
+         - Párrafo 3: Riesgo y recomendación (score, red flags, acción)
+
+      3. ANÁLISIS FINANCIERO DETALLADO:
+         - Condiciones del contrato
+         - Costo total desglosado
+         - Métricas clave (CAT, TEA, TIR)
+         - Comparación con mercado
+         - Estructura de pagos
+
+      4. EVALUACIÓN DE RIESGOS:
+         - Resumen de riesgo (score, nivel)
+         - Tabla de evaluación por categoría
+         - Alertas identificadas
+         - Fortalezas del contrato
+         - Debilidades del contrato
+
+      5. RECOMENDACIONES:
+         - Recomendación estratégica (Aceptar/Negociar/Rechazar)
+         - Puntos prioritarios de negociación (si aplica)
+         - Próximos pasos
+
+      6. VALIDACIÓN PRE-ENTREGA:
+         ☐ Cifras coinciden con inputs
+         ☐ No hay contradicciones
+         ☐ Recomendación alineada con riesgo
+         ☐ Lenguaje profesional sin especulación
+         ☐ Estructura markdown correcta
+
+      PROHIBIDO:
+      - NO añadir análisis nuevos
+      - NO contradecir datos de agentes previos
+      - NO usar lenguaje especulativo
+      - NO hacer afirmaciones sin evidencia
+
+    expected_output: >
+      Reporte markdown estructurado:
+
+      # REPORTE DE ANÁLISIS: CONTRATO DE PRÉSTAMO
+
+      *Fecha de Análisis: {date}*
+
+      ---
+
+      ## RESUMEN EJECUTIVO
+
+      {3 párrafos sintetizando hallazgos principales}
+
+      ---
+
+      ## ANÁLISIS FINANCIERO DETALLADO
+
+      ### Condiciones del Contrato
+      [Tabla con datos principales]
+
+      ### Costo Total del Financiamiento
+      [Desglose completo]
+
+      ### Métricas Clave
+      [CAT, TEA, TIR, VPN]
+
+      ### Comparación con Mercado
+      [Análisis vs benchmarks]
+
+      ### Estructura de Pagos
+      [Explicación de tipo de amortización]
+
+      ---
+
+      ## EVALUACIÓN DE RIESGOS
+
+      ### Resumen de Riesgo
+      [Score y nivel]
+
+      ### Evaluación por Categoría
+      [Tabla con scores]
+
+      ### Alertas Identificadas
+      [Lista de red flags si hay]
+
+      ### Fortalezas del Contrato
+      [Lista de aspectos positivos]
+
+      ### Debilidades del Contrato
+      [Lista de aspectos negativos]
+
+      ---
+
+      ## RECOMENDACIONES
+
+      ### Recomendación Estratégica: **{ACCIÓN}**
+
+      [Justificación detallada]
+
+      ### Puntos Prioritarios de Negociación
+      [Si aplica, lista priorizada]
+
+      ### Próximos Pasos
+      [Acciones específicas a tomar]
+
+      ---
+
+      ## ANEXO: DATOS TÉCNICOS
+
+      [Fuentes, supuestos, limitaciones]
+
+      ---
+
+      *Fin del Reporte*
+
+    agent: report_synthesizer
+
+    context:
+      - extract_contract_data
+      - calculate_financial_metrics
+      - evaluate_risks
+
+    output_file: "outputs/final_report.md"
+
+  # ==========================================================================
+  # TASK 7: VALIDACIÓN FINAL (TEMPORAL)
+  # ==========================================================================
+
+  validate_final_report:
+
+    description: >
+      Validar coherencia y calidad del reporte final.
+
+      INPUT:
+      - extracted_data.json
+      - financial_calculations.json
+      - risk_assessment.json
+      - final_report.md
+
+      PROCESO:
+
+      Ejecutar validación en niveles:
+      1. Formato markdown correcto
+      2. No aplica
+      3. No aplica
+      4. Coherencia entre reporte y análisis previos
+      5. Señales de información especulativa
+
+      Generar reporte PASS/FAIL final.
+
+    expected_output: >
+      Reporte markdown de validación final.
+
+    agent: quality_inspector
+
+    context:
+      - extract_contract_data
+      - calculate_financial_metrics
+      - evaluate_risks
+      - synthesize_report
+
+    output_file: "outputs/validation_final.md"
+
+# ============================================================================
+# NOTAS DE IMPLEMENTACIÓN EN CREWAI STUDIO
+# ============================================================================
+
+implementation_notes:
+
+  context_passing:
+    note: >
+      En CrewAI Studio, los outputs de tasks previas se pasan automáticamente
+      como context a tasks posteriores. No es necesario especificar variables
+      de input explícitamente si están en el context.
+
+  output_files:
+    note: >
+      CrewAI Studio puede configurarse para escribir outputs a archivos
+      automáticamente usando file_write_tool o guardando en variables de crew.
+
+  temporal_tasks:
+    note: >
+      Las tasks de validación (validate_*) están marcadas como TEMPORAL y
+      deben comentarse/desactivarse antes de deployment a producción.
+
+  error_handling:
+    note: >
+      Si una task falla (ej: cálculos con datos inválidos), el crew puede
+      configurarse para detener o continuar según criticidad del error.
+
+# ============================================================================
+# FIN DE DEFINICIÓN DE TASKS
+# ============================================================================

@@ -1,0 +1,412 @@
+# ============================================================================
+# MAPEO DE ARQUITECTURA: Sistema Original → Agentes CrewAI
+# ============================================================================
+# Versión: 1.0
+# Fecha: 2025-12-01
+
+# ============================================================================
+# 📐 ARQUITECTURA ORIGINAL (Python Modular)
+# ============================================================================
+
+original_system:
+  components:
+    - name: "ContractParser"
+      file: "src/contract_parser.py"
+      responsibilities:
+        - "Extracción de texto de PDFs usando PyPDF2"
+        - "Parsing con regex patterns para identificar campos"
+        - "Detección de contratos multi-tramo"
+        - "Cálculo de confianza de extracción"
+        - "Generación de advertencias para datos ambiguos"
+      key_classes:
+        - ContratoParseado
+        - Tramo
+        - Comision
+        - Garantia
+        - ClausulaPrepago
+        - Covenant
+
+    - name: "FinancialCalculator"
+      file: "src/financial_calculator.py"
+      responsibilities:
+        - "Generación de tabla de amortización (francesa, bullet, gracia)"
+        - "Cálculo de TEA, CAT, TIR, VPN"
+        - "Comparación con tasas de mercado (market_rates.json)"
+        - "Análisis de sensibilidad para tasas variables"
+        - "Cálculo de escenarios de prepago"
+      key_classes:
+        - ResultadoCalculo
+        - FilaAmortizacion
+
+    - name: "RiskAssessor"
+      file: "src/risk_assessor.py"
+      responsibilities:
+        - "Evaluación en 5 categorías de riesgo con scoring 0-100"
+        - "Identificación de red flags con severidad"
+        - "Cálculo de score total ponderado"
+        - "Generación de recomendación estratégica"
+        - "Análisis de fortalezas y debilidades"
+      key_classes:
+        - ResultadoRiesgo
+        - RedFlag
+        - ScoreCategoria
+
+    - name: "ReportGenerator"
+      file: "src/report_generator.py"
+      responsibilities:
+        - "Generación de narrativas con templates Jinja2"
+        - "Creación de PDFs con ReportLab"
+        - "Visualizaciones con Plotly"
+        - "Sistema de reglas para explicaciones contextuales"
+      key_classes:
+        - ReportGenerator (con templates integrados)
+
+  data_flow:
+    sequence: "PDF → Parser → Calculator → RiskAssessor → ReportGenerator → UI"
+
+    step_1:
+      component: "ContractParser"
+      input: "PDF file path"
+      output: "ContratoParseado object"
+
+    step_2:
+      component: "FinancialCalculator"
+      input: "ContratoParseado object"
+      output: "ResultadoCalculo object"
+
+    step_3:
+      component: "RiskAssessor"
+      input: "ContratoParseado + ResultadoCalculo"
+      output: "ResultadoRiesgo object"
+
+    step_4:
+      component: "ReportGenerator"
+      input: "ContratoParseado + ResultadoCalculo + ResultadoRiesgo"
+      output: "PDF report + visualizations"
+
+# ============================================================================
+# 🤖 ARQUITECTURA CREWAI (Multi-Agente)
+# ============================================================================
+
+crewai_system:
+  agents:
+    # ------------------------------------------------------------------------
+    # AGENTE 1: EXTRACTOR DE DATOS DEL CONTRATO
+    # ------------------------------------------------------------------------
+    - id: "contract_data_extractor"
+      maps_to_component: "ContractParser"
+      responsibility_scope: "70% del ContractParser original"
+
+      role: "Contract Data Extraction Specialist"
+
+      primary_responsibilities:
+        - "Extraer partes del contrato (prestamista, prestatario)"
+        - "Identificar monto principal, moneda, tasa, plazo"
+        - "Detectar tipo de tasa y características (variable con índice/spread)"
+        - "Extraer garantías con clasificación (real/personal/mixta)"
+        - "Identificar comisiones con valores y tipo"
+        - "Detectar cláusulas de prepago, covenants, incumplimiento"
+        - "Manejar contratos multi-tramo"
+
+      key_differences_from_original:
+        - "No tiene acceso directo a PyPDF2 (recibe texto pre-extraído)"
+        - "Debe reportar nivel de confianza POR CAMPO (no global)"
+        - "Debe marcar explícitamente campos 'No encontrado' vs 'Ambiguo'"
+        - "No usa regex patterns - usa comprensión semántica de LLM"
+
+      tools_available:
+        - "file_read_tool (leer PDF ya procesado a texto)"
+        - "Ninguna herramienta de parsing - usa capacidad nativa del LLM"
+
+      output_format: "JSON estructurado con schema definido"
+
+      validation_requirements:
+        - "Cada campo crítico debe tener confidence_score (0.0-1.0)"
+        - "Debe citar fragmento textual del contrato como evidencia"
+        - "Debe listar explícitamente campos no encontrados"
+
+    # ------------------------------------------------------------------------
+    # AGENTE 2: CALCULADORA FINANCIERA
+    # ------------------------------------------------------------------------
+    - id: "financial_calculator"
+      maps_to_component: "FinancialCalculator"
+      responsibility_scope: "100% del FinancialCalculator original"
+
+      role: "Financial Metrics Calculator"
+
+      primary_responsibilities:
+        - "Generar tabla de amortización completa"
+        - "Calcular CAT, TEA, TIR, VPN con precisión >99%"
+        - "Comparar con tasas de mercado usando market_rates.json"
+        - "Generar análisis de sensibilidad (si tasa variable)"
+        - "Calcular escenarios de prepago"
+
+      key_differences_from_original:
+        - "Recibe JSON del extractor (no objeto Python ContratoParseado)"
+        - "Debe validar input antes de calcular (detectar datos faltantes)"
+        - "Debe reportar métricas con precisión decimal exacta"
+        - "Debe documentar fórmulas usadas en el output"
+
+      tools_available:
+        - "code_interpreter_tool (para cálculos matemáticos complejos)"
+        - "file_read_tool (leer market_rates.json)"
+
+      output_format: "JSON con tabla_amortizacion + métricas + comparación"
+
+      validation_requirements:
+        - "Tabla de amortización debe sumar exactamente al monto principal"
+        - "CAT/TEA deben estar dentro de ±0.1% del cálculo manual"
+        - "Debe explicar cualquier suposición hecha (ej: fecha inicio)"
+
+    # ------------------------------------------------------------------------
+    # AGENTE 3: EVALUADOR DE RIESGOS
+    # ------------------------------------------------------------------------
+    - id: "risk_evaluator"
+      maps_to_component: "RiskAssessor"
+      responsibility_scope: "100% del RiskAssessor original"
+
+      role: "Financial Risk Assessment Specialist"
+
+      primary_responsibilities:
+        - "Evaluar riesgo en 5 categorías con scoring 0-100"
+        - "Identificar red flags con severidad clasificada"
+        - "Calcular score total ponderado"
+        - "Generar recomendación estratégica (Aceptar/Negociar/Rechazar)"
+        - "Listar fortalezas, debilidades, puntos de negociación"
+
+      key_differences_from_original:
+        - "Recibe 2 JSONs (extracción + cálculos) en vez de objetos Python"
+        - "Debe explicar razonamiento de cada score asignado"
+        - "Debe justificar la recomendación estratégica con evidencia"
+
+      tools_available:
+        - "file_read_tool (leer risk_factors.json)"
+
+      output_format: "JSON con scores, red_flags, recommendation, reasoning"
+
+      validation_requirements:
+        - "Score total debe ser consistente con scores de categorías"
+        - "Recomendación debe alinearse con score (ej: score <40 → NO Aceptar)"
+        - "Cada red flag debe tener evidencia del contrato"
+
+    # ------------------------------------------------------------------------
+    # AGENTE 4: SINTETIZADOR DE REPORTES
+    # ------------------------------------------------------------------------
+    - id: "report_synthesizer"
+      maps_to_component: "ReportGenerator"
+      responsibility_scope: "80% del ReportGenerator original"
+
+      role: "Financial Report Synthesis Expert"
+
+      primary_responsibilities:
+        - "Generar resumen ejecutivo contextualizado"
+        - "Crear narrativa de análisis financiero"
+        - "Sintetizar evaluación de riesgos en lenguaje claro"
+        - "Proporcionar recomendaciones accionables"
+        - "Estructurar reporte en markdown profesional"
+
+      key_differences_from_original:
+        - "NO genera PDFs (CrewAI Studio limita herramientas de generación)"
+        - "NO genera visualizaciones Plotly (se harán en post-procesamiento)"
+        - "Enfoque en narrativa de calidad vs formato visual"
+
+      tools_available:
+        - "file_write_tool (guardar reporte markdown)"
+
+      output_format: "Markdown estructurado + JSON para visualizaciones"
+
+      validation_requirements:
+        - "Narrativa debe ser coherente sin contradicciones"
+        - "Todas las afirmaciones deben tener evidencia del análisis previo"
+        - "Lenguaje debe ser profesional sin especulación"
+
+    # ------------------------------------------------------------------------
+    # AGENTE 5: INSPECTOR DE CALIDAD (VALIDADOR TEMPORAL)
+    # ------------------------------------------------------------------------
+    - id: "quality_inspector"
+      maps_to_component: "NUEVO - No existe en sistema original"
+      responsibility_scope: "Validación anti-alucinación"
+
+      role: "Quality Assurance and Anti-Hallucination Inspector"
+
+      primary_responsibilities:
+        - "Validar precisión de extracción comparando con texto original"
+        - "Detectar señales de alucinación (datos inventados, inferencias sin base)"
+        - "Verificar consistencia entre outputs de diferentes agentes"
+        - "Validar cálculos matemáticos"
+        - "Generar reporte de validación con nivel de confianza"
+
+      usage_pattern: "TEMPORAL - Solo en desarrollo/testing"
+
+      tools_available:
+        - "file_read_tool (leer todos los outputs previos)"
+
+      output_format: "Validation report con PASS/FAIL por nivel"
+
+      validation_levels:
+        - "NIVEL 1: Formato y estructura correctos"
+        - "NIVEL 2: Datos verificables contra fuente"
+        - "NIVEL 3: Coherencia entre agentes"
+        - "NIVEL 4: Señales de alucinación"
+
+# ============================================================================
+# 🔄 FLUJO DE TAREAS EN CREWAI
+# ============================================================================
+
+task_flow:
+  # Tarea 1: Extracción
+  - task_id: "extract_contract_data"
+    agent: "contract_data_extractor"
+    input: "{contract_text}"
+    output: "extracted_data.json"
+
+  # Tarea 2: Validación de Extracción (TEMPORAL)
+  - task_id: "validate_extraction"
+    agent: "quality_inspector"
+    input: "{contract_text} + extracted_data.json"
+    output: "extraction_validation_report.md"
+    depends_on: ["extract_contract_data"]
+
+  # Tarea 3: Cálculos Financieros
+  - task_id: "calculate_financial_metrics"
+    agent: "financial_calculator"
+    input: "extracted_data.json"
+    output: "financial_calculations.json"
+    depends_on: ["extract_contract_data"]
+
+  # Tarea 4: Validación de Cálculos (TEMPORAL)
+  - task_id: "validate_calculations"
+    agent: "quality_inspector"
+    input: "extracted_data.json + financial_calculations.json"
+    output: "calculations_validation_report.md"
+    depends_on: ["calculate_financial_metrics"]
+
+  # Tarea 5: Evaluación de Riesgos
+  - task_id: "evaluate_risks"
+    agent: "risk_evaluator"
+    input: "extracted_data.json + financial_calculations.json"
+    output: "risk_assessment.json"
+    depends_on: ["calculate_financial_metrics"]
+
+  # Tarea 6: Síntesis de Reporte
+  - task_id: "synthesize_report"
+    agent: "report_synthesizer"
+    input: "extracted_data.json + financial_calculations.json + risk_assessment.json"
+    output: "final_report.md"
+    depends_on: ["evaluate_risks"]
+
+  # Tarea 7: Validación Final (TEMPORAL)
+  - task_id: "validate_final_report"
+    agent: "quality_inspector"
+    input: "Todos los outputs anteriores + final_report.md"
+    output: "final_validation_report.md"
+    depends_on: ["synthesize_report"]
+
+# ============================================================================
+# 📊 COMPARACIÓN DE CAPACIDADES
+# ============================================================================
+
+capability_comparison:
+  extraction:
+    original: "Regex patterns + PyPDF2 directo"
+    crewai: "LLM comprensión semántica + texto pre-extraído"
+    advantage: "CrewAI - Más flexible con formatos variados"
+
+  calculations:
+    original: "NumPy + fórmulas Python optimizadas"
+    crewai: "Code interpreter con validación explícita"
+    advantage: "Original - Más rápido y preciso"
+
+  risk_assessment:
+    original: "Reglas hardcoded en Python"
+    crewai: "LLM con reglas guiadas por backstory"
+    advantage: "CrewAI - Más adaptable, mejor razonamiento narrativo"
+
+  reporting:
+    original: "Jinja2 + ReportLab + Plotly = PDF completo"
+    crewai: "Markdown narrativo (requiere post-procesamiento para PDF)"
+    advantage: "Original - Output más profesional directo"
+
+# ============================================================================
+# ⚠️ LIMITACIONES CRÍTICAS DE CREWAI VS ORIGINAL
+# ============================================================================
+
+crewai_limitations:
+  no_direct_pdf_parsing:
+    description: "CrewAI Studio no tiene PyPDF2 integrado"
+    workaround: "Pre-procesar PDF a texto antes de pasarlo al agente"
+
+  no_numpy_calculations:
+    description: "Sin acceso directo a NumPy para cálculos optimizados"
+    workaround: "Usar code_interpreter_tool con Python estándar"
+
+  no_pdf_generation:
+    description: "Sin ReportLab ni capacidad de generar PDFs"
+    workaround: "Generar markdown + convertir a PDF en post-procesamiento"
+
+  no_plotly_visualizations:
+    description: "Sin capacidad de generar gráficos interactivos"
+    workaround: "Exportar datos JSON + generar visualizaciones separadamente"
+
+  slower_execution:
+    description: "LLMs son más lentos que código Python optimizado"
+    impact: "Análisis puede tomar 2-5 minutos vs <10 segundos original"
+
+# ============================================================================
+# ✅ VENTAJAS DE CREWAI VS ORIGINAL
+# ============================================================================
+
+crewai_advantages:
+  semantic_understanding:
+    description: "LLM puede interpretar lenguaje legal complejo"
+    example: "Detectar cláusulas implícitas que regex no capturaría"
+
+  adaptability:
+    description: "Se adapta a formatos de contrato variados sin código nuevo"
+    example: "Maneja contratos de diferentes bancos sin modificar reglas"
+
+  narrative_quality:
+    description: "Genera narrativas más contextualizadas y profesionales"
+    example: "Explica 'por qué' una tasa es elevada, no solo 'que' es elevada"
+
+  explainability:
+    description: "Puede justificar razonamiento de forma clara"
+    example: "Documenta proceso de cálculo de score en lenguaje natural"
+
+# ============================================================================
+# 🎯 ESTRATEGIA DE IMPLEMENTACIÓN HÍBRIDA (RECOMENDADA)
+# ============================================================================
+
+hybrid_approach:
+  recommendation: "Usar CrewAI para análisis + Python original para cálculos"
+
+  architecture:
+    step_1:
+      component: "CrewAI: contract_data_extractor"
+      task: "Extracción semántica del PDF"
+
+    step_2:
+      component: "Python: FinancialCalculator (original)"
+      task: "Cálculos matemáticos precisos"
+
+    step_3:
+      component: "CrewAI: risk_evaluator"
+      task: "Análisis de riesgos con razonamiento"
+
+    step_4:
+      component: "CrewAI: report_synthesizer"
+      task: "Generación de narrativa"
+
+    step_5:
+      component: "Python: ReportGenerator (original)"
+      task: "Conversión a PDF profesional"
+
+  benefits:
+    - "Combina flexibilidad de LLMs con precisión de código"
+    - "Mantiene rapidez de cálculos críticos"
+    - "Mejora calidad narrativa del reporte"
+    - "Reduce riesgo de errores matemáticos en LLM"
+
+# ============================================================================
+# FIN DE MAPEO DE ARQUITECTURA
+# ============================================================================

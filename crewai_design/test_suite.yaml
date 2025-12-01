@@ -1,0 +1,669 @@
+# ============================================================================
+# TEST SUITE: Sistema de Análisis de Contratos
+# ============================================================================
+# Versión: 1.0
+# Fecha: 2025-12-01
+# Propósito: Casos de test para validación del sistema antes de producción
+
+test_suite:
+  suite_name: "Tests para Sistema de Análisis de Contratos de Préstamo"
+
+  target_metrics:
+    extraction_accuracy: 0.95  # 95% de campos correctos
+    hallucination_rate_max: 0.05  # Máximo 5% de alucinaciones
+    calculation_precision: 0.99  # 99% de cálculos correctos
+    consistency_score: 0.85  # 85% de overlap en ejecuciones múltiples
+    overall_pass_rate: 0.90  # 90% de tests pasados
+
+  # ==========================================================================
+  # BASIC TESTS (Happy Path - Casos Típicos)
+  # ==========================================================================
+
+  basic_tests:
+
+    # ========================================================================
+    # TEST BÁSICO 1: Contrato Simple Estándar
+    # ========================================================================
+
+    test_001_simple_contract:
+      id: "BASIC-001"
+      name: "Contrato de préstamo simple con tasa fija"
+      priority: "CRÍTICO"
+
+      description: >
+        Contrato estándar con todos los datos claramente especificados.
+        Tasa fija, amortización francesa, sin comisiones complejas.
+
+      input:
+        contract_text: |
+          CONTRATO DE PRÉSTAMO MERCANTIL
+
+          PRESTAMISTA: Banco Nacional S.A. de C.V.
+          PRESTATARIO: Empresas Industriales XYZ S.R.L.
+
+          CLÁUSULA PRIMERA - MONTO Y MONEDA
+          El Prestamista otorga al Prestatario un préstamo por la cantidad de
+          UN MILLÓN DE DÓLARES (USD $1,000,000.00).
+
+          CLÁUSULA SEGUNDA - TASA DE INTERÉS
+          El préstamo devengará intereses a una tasa fija de 8.5% (ocho punto
+          cinco por ciento) anual.
+
+          CLÁUSULA TERCERA - PLAZO
+          El préstamo se amortizará en 36 (treinta y seis) meses con pagos
+          mensuales de capital e intereses.
+
+          CLÁUSULA CUARTA - COMISIONES
+          Comisión de apertura: 2.0% sobre el monto del préstamo, pagadera
+          al inicio.
+
+          CLÁUSULA QUINTA - GARANTÍAS
+          El préstamo se garantiza con hipoteca de primer grado sobre inmueble
+          ubicado en Calle Principal 123, Ciudad de México.
+
+          CLÁUSULA SEXTA - PREPAGO
+          El Prestatario podrá realizar prepagos con penalización del 2.0%
+          durante los primeros 18 meses.
+
+      expected_behavior:
+        - "Extraer correctamente todas las partes del contrato"
+        - "Identificar monto como 1000000.00 en formato correcto"
+        - "Detectar tasa fija de 8.50%"
+        - "Calcular plazo de 36 meses"
+        - "Identificar frecuencia mensual"
+        - "Extraer comisión de apertura 2.0%"
+        - "Identificar garantía hipotecaria"
+        - "Detectar prepago con penalización 2.0% por 18 meses"
+        - "Generar tabla de amortización francesa de 36 períodos"
+        - "Calcular CAT y TEA con precisión >99%"
+        - "Asignar score de riesgo razonable (esperado 60-75)"
+        - "Generar reporte coherente"
+
+      success_criteria:
+        extraction:
+          - "lender == 'Banco Nacional S.A. de C.V.' con confidence >= 0.95"
+          - "borrower == 'Empresas Industriales XYZ S.R.L.' con confidence >= 0.95"
+          - "principal_amount == 1000000.00 con confidence == 1.0"
+          - "currency == 'USD' con confidence >= 0.9"
+          - "interest_rate.rate == 8.50 con confidence == 1.0"
+          - "interest_rate.type == 'fixed' con confidence == 1.0"
+          - "term_months == 36 con confidence == 1.0"
+          - "payment_frequency == 'monthly' con confidence == 1.0"
+          - "commissions[0].type == 'apertura' Y value == 2.0"
+          - "guarantees.type_general == 'real'"
+          - "prepayment.penalty_percentage == 2.0"
+          - "Máximo 2 campos en fields_not_found"
+
+        calculations:
+          - "Tabla amortización tiene exactamente 36 filas"
+          - "Σ capital == 1000000.00 (±1.00)"
+          - "Saldo final == 0.00 (±1.00)"
+          - "TEA entre 8.80% y 8.90%"
+          - "CAT entre 9.50% y 11.00%"
+          - "monthly_payment entre 31500 y 33000"
+          - "total_interest entre 140000 y 150000"
+
+        risk_assessment:
+          - "score_total entre 60 y 80"
+          - "risk_level == 'bajo' O 'moderado'"
+          - "Máximo 2 red_flags"
+          - "strategic_action == 'Aceptar' O 'Negociar'"
+          - "Ningún red_flag con severity == 'critica'"
+
+        report:
+          - "Reporte contiene todas las secciones obligatorias"
+          - "Cifras en reporte coinciden con calculations (100%)"
+          - "Recomendación alineada con risk_assessment"
+          - "No contiene lenguaje especulativo"
+
+        validation:
+          - "validation_extraction: PASS en niveles 1, 2, 5"
+          - "validation_calculations: PASS en nivel 3"
+          - "validation_final: PASS en nivel 4"
+          - "Confianza general >= 0.90"
+
+    # ========================================================================
+    # TEST BÁSICO 2: Contrato con Tasa Variable
+    # ========================================================================
+
+    test_002_variable_rate:
+      id: "BASIC-002"
+      name: "Contrato con tasa variable con cap"
+      priority: "ALTO"
+
+      description: >
+        Contrato con tasa variable referenciada a índice + spread, con cap
+        y floor para limitar exposición.
+
+      input:
+        contract_text: |
+          CONTRATO DE CRÉDITO REVOLVENTE
+
+          Entre BANCO INTERNACIONAL (Acreedor) y CORPORATIVO ABC S.A. (Deudor)
+
+          MONTO: EUR €500,000 (Quinientos mil euros)
+
+          TASA: Variable, calculada como EURIBOR a 3 meses más 250 puntos base.
+          La tasa tendrá un límite máximo (cap) de 10% anual y un piso (floor)
+          de 3% anual.
+
+          PLAZO: 24 meses con pagos trimestrales.
+
+          COMISIONES:
+          - Apertura: EUR €5,000 fijos
+          - Mantenimiento trimestral: 0.15% sobre saldo
+
+          PREPAGO: Permitido sin penalización.
+
+      expected_behavior:
+        - "Detectar tasa variable con índice EURIBOR"
+        - "Extraer spread de 250 bps"
+        - "Identificar cap de 10%"
+        - "Identificar floor de 3%"
+        - "Calcular con tasa actual (asumir EURIBOR actual)"
+        - "Generar análisis de sensibilidad con escenarios"
+        - "Identificar red flag si no hay cap (pero aquí sí hay)"
+
+      success_criteria:
+        extraction:
+          - "interest_rate.type == 'variable'"
+          - "interest_rate.index == 'EURIBOR'"
+          - "interest_rate.spread_bps == 250"
+          - "interest_rate.cap == 10.0"
+          - "interest_rate.floor == 3.0"
+          - "payment_frequency == 'quarterly'"
+          - "prepayment.penalty_percentage == 0.0"
+
+        calculations:
+          - "sensitivity_analysis presente y no null"
+          - "sensitivity_analysis.scenarios tiene 5-7 escenarios"
+          - "sensitivity_analysis.has_cap == true"
+          - "sensitivity_analysis.has_floor == true"
+
+        risk_assessment:
+          - "NO hay red_flag tipo 'sin_cap' (porque tiene cap)"
+          - "score_tasa penalizado por variable pero bonificado por cap"
+
+    # ========================================================================
+    # TEST BÁSICO 3: Contrato Bullet
+    # ========================================================================
+
+    test_003_bullet_structure:
+      id: "BASIC-003"
+      name: "Contrato con estructura bullet"
+      priority: "ALTO"
+
+      description: >
+        Préstamo donde el capital se paga completamente al vencimiento,
+        solo intereses durante el plazo.
+
+      input:
+        contract_text: |
+          PAGARÉ CON RENDIMIENTO LIQUIDABLE AL VENCIMIENTO
+
+          DEUDOR: Desarrollos Inmobiliarios S.A.
+          ACREEDOR: Fondo de Inversión XYZ
+
+          PRINCIPAL: MXN $2,000,000.00 (Dos millones de pesos mexicanos)
+          TASA: 12% anual fija
+          PLAZO: 12 meses con pago único al vencimiento (estructura bullet)
+
+          Los intereses se pagarán mensualmente. El capital se pagará íntegramente
+          al vencimiento junto con el último pago de intereses.
+
+          Sin comisiones adicionales.
+
+      expected_behavior:
+        - "Detectar estructura bullet"
+        - "Generar tabla donde capital = 0 en períodos 1-11"
+        - "Período 12 tiene pago de capital completo"
+        - "Cuota mensual 1-11 = solo intereses"
+        - "Cuota final = capital + interés"
+
+      success_criteria:
+        extraction:
+          - "is_bullet == true con confidence >= 0.9"
+          - "payment_frequency incluye indicador de bullet"
+
+        calculations:
+          - "amortization_type == 'bullet'"
+          - "amortization_table[0].principal == 0.00"
+          - "amortization_table[10].principal == 0.00"
+          - "amortization_table[11].principal == 2000000.00"
+          - "amortization_table[11].payment == 2000000 + interes_mes_12"
+
+        risk_assessment:
+          - "Penalización en liquidez por estructura bullet"
+          - "red_flag o warning sobre concentración de pago al vencimiento"
+
+  # ==========================================================================
+  # ADVERSARIAL TESTS (Edge Cases y Casos Problemáticos)
+  # ==========================================================================
+
+  adversarial_tests:
+
+    # ========================================================================
+    # TEST ADVERSARIAL 1: Datos Faltantes Críticos
+    # ========================================================================
+
+    test_adv_001_missing_critical_data:
+      id: "ADV-001"
+      name: "Contrato con datos críticos faltantes"
+      priority: "CRÍTICO"
+
+      description: >
+        Contrato con información muy vaga, faltan datos críticos como monto
+        exacto, tasa específica, o plazo definido. El sistema NO debe inventar
+        valores.
+
+      input:
+        contract_text: |
+          ACUERDO DE FINANCIAMIENTO
+
+          Entre las partes se conviene el otorgamiento de un crédito por la
+          suma que resulte necesaria según análisis de viabilidad.
+
+          La tasa de interés será competitiva según las condiciones de mercado
+          vigentes al momento del desembolso.
+
+          El plazo y forma de pago se definirán de común acuerdo entre las partes.
+
+      expected_behavior:
+        - "NO inventar monto específico"
+        - "NO asumir tasa 'típica' como 8% o 10%"
+        - "NO inferir plazo estándar como 36 meses"
+        - "Marcar claramente todos los campos críticos como 'No encontrado'"
+        - "Asignar confidence_score = 0.0 a campos no encontrados"
+        - "requires_manual_review = true"
+        - "NO proceder con cálculos financieros (debe generar error)"
+
+      success_criteria:
+        extraction:
+          - "principal_amount.value == null"
+          - "principal_amount.confidence == 0.0"
+          - "principal_amount.note contiene 'No encontrado'"
+          - "interest_rate.rate == null O 'AMBIGUOUS'"
+          - "term_months.value == null"
+          - "fields_not_found incluye al menos ['principal_amount', 'interest_rate', 'term_months']"
+          - "extraction_metadata.requires_manual_review == true"
+          - "extraction_metadata.confidence_score_avg < 0.50"
+          - "extraction_metadata.warnings tiene 3+ advertencias"
+
+        calculations:
+          - "output.status == 'ERROR' O 'REJECTED'"
+          - "error_type == 'INVALID_INPUT' O 'INCOMPLETE_DATA'"
+          - "cannot_proceed == true"
+          - "missing_critical_fields lista campos faltantes"
+          - "NO genera tabla de amortización"
+
+        validation:
+          - "validation_extraction identifica múltiples campos faltantes"
+          - "Nivel 2: PASS (porque no hay alucinaciones)"
+          - "Nivel 5: PASS (porque admitió honestamente que no encontró datos)"
+
+    # ========================================================================
+    # TEST ADVERSARIAL 2: Tasa Variable Sin Cap (Red Flag Crítico)
+    # ========================================================================
+
+    test_adv_002_variable_no_cap:
+      id: "ADV-002"
+      name: "Tasa variable sin protección de cap"
+      priority: "ALTO"
+
+      description: >
+        Contrato con tasa variable SIN cap, exponiendo al prestatario a
+        riesgo ilimitado de subida de tasas. Debe generar red flag crítico.
+
+      input:
+        contract_text: |
+          CONTRATO DE PRÉSTAMO EMPRESARIAL
+
+          BANCO CREDITICIO S.A. presta a INDUSTRIAS DEL NORTE S.A.
+
+          MONTO: USD $750,000
+          TASA: Variable, LIBOR + 350 puntos base, revisable trimestralmente
+          PLAZO: 48 meses, pagos mensuales
+
+      expected_behavior:
+        - "Detectar tasa variable"
+        - "NO encontrar cap"
+        - "Generar red_flag tipo 'sin_cap' con severity 'alta'"
+        - "Penalizar score de riesgo significativamente"
+        - "Recomendar NEGOCIAR o RECHAZAR (no Aceptar)"
+
+      success_criteria:
+        extraction:
+          - "interest_rate.type == 'variable'"
+          - "interest_rate.cap == null"
+          - "interest_rate.floor == null O presente"
+
+        risk_assessment:
+          - "red_flags contiene elemento con tipo == 'sin_cap'"
+          - "red_flag.severity == 'alta' O 'critica'"
+          - "red_flag.recommendation incluye 'cap'"
+          - "score_total penalizado (esperado <65)"
+          - "strategic_action == 'Negociar' O 'Rechazar' (NO 'Aceptar')"
+
+        report:
+          - "Reporte menciona riesgo de tasa variable sin cap"
+          - "Puntos de negociación incluyen 'agregar cap'"
+
+    # ========================================================================
+    # TEST ADVERSARIAL 3: Múltiples Interpretaciones (Ambigüedad)
+    # ========================================================================
+
+    test_adv_003_ambiguous_terms:
+      id: "ADV-003"
+      name: "Contrato con términos ambiguos"
+      priority: "MEDIO"
+
+      description: >
+        Contrato con información que puede interpretarse de múltiples formas.
+        Sistema debe reportar ambigüedad, NO elegir arbitrariamente.
+
+      input:
+        contract_text: |
+          CONTRATO DE FINANCIAMIENTO
+
+          Monto: $500,000 (quinientos mil)
+          Tasa: 8.5% nominal
+          Plazo: 3 años
+          Pagos: Al vencimiento de cada período
+
+          Comisión: 2% sobre el saldo
+
+      expected_behavior:
+        - "Detectar que moneda no está especificada ($ ambiguo)"
+        - "Plazo '3 años' debe convertirse a 36 meses"
+        - "Pagos 'al vencimiento de cada período' es ambiguo"
+        - "Comisión '2% sobre saldo' sin especificar periodicidad"
+
+      success_criteria:
+        extraction:
+          - "currency.value == 'USD' con confidence < 0.8 Y note indica 'Asumido'"
+          - "O currency.value == 'AMBIGUOUS' con possible_values"
+          - "term_months == 36 con note 'Convertido de 3 años'"
+          - "payment_frequency marca como ambiguo O confidence < 0.7"
+          - "commissions[0] tiene note sobre ambigüedad de periodicidad"
+          - "ambiguous_fields lista al menos 2 campos"
+
+    # ========================================================================
+    # TEST ADVERSARIAL 4: Múltiples Red Flags (Contrato Muy Desfavorable)
+    # ========================================================================
+
+    test_adv_004_multiple_red_flags:
+      id: "ADV-004"
+      name: "Contrato con múltiples red flags críticos"
+      priority: "ALTO"
+
+      description: >
+        Contrato con condiciones muy desfavorables: tasa muy alta, múltiples
+        triggers, penalización excesiva, sobrecolateralización, cross-default.
+
+      input:
+        contract_text: |
+          CONTRATO DE PRÉSTAMO DE ALTO RIESGO
+
+          Monto: USD $300,000
+          Tasa: Variable LIBOR + 600 puntos base (actualmente 18% anual)
+          Sin cap ni floor
+          Plazo: 18 meses, pagos mensuales
+
+          Comisiones:
+          - Apertura: 4.0%
+          - Mantenimiento: 0.5% mensual sobre saldo
+
+          Garantías:
+          - Hipoteca de 1er grado sobre inmueble
+          - Prenda sobre maquinaria y equipo
+          - Aval solidario del director general
+
+          Prepago: Penalización de 5.0% en cualquier momento
+
+          Incumplimiento:
+          El crédito se dará por vencido anticipadamente en caso de:
+          - Atraso de más de 5 días en cualquier pago
+          - Incumplimiento de cualquier otra obligación con cualquier institución
+          - Cambio en accionistas mayoritarios sin autorización
+          - Reducción de ventas en más del 15% trimestral
+          - DSCR menor a 1.8
+          - Deuda/EBITDA mayor a 2.0
+          - Inicio de cualquier procedimiento legal contra la empresa
+
+          Cláusula cross-default con todas las obligaciones presentes y futuras.
+
+      expected_behavior:
+        - "Identificar 7-10 red flags diferentes"
+        - "Score de riesgo muy bajo (<30)"
+        - "Nivel de riesgo 'muy_alto'"
+        - "Recomendación estratégica: RECHAZAR"
+        - "Múltiples debilidades identificadas"
+
+      success_criteria:
+        extraction:
+          - "interest_rate.spread_bps == 600"
+          - "interest_rate.cap == null"
+          - "commissions tiene 2 elementos"
+          - "guarantees.type_general == 'mixta'"
+          - "guarantees.items.length >= 3"
+          - "prepayment.penalty_percentage == 5.0"
+          - "default_clauses.items.length >= 7"
+          - "has_cross_default == true"
+          - "covenants.items.length >= 2"
+
+        risk_assessment:
+          - "red_flags.length >= 6"
+          - "Incluye: tasa_elevada, sin_cap, penalizacion_excesiva, triggers_excesivos, sobrecolateralizacion, cross_default"
+          - "Múltiples con severity == 'alta' O 'critica'"
+          - "score_total < 35"
+          - "risk_level == 'muy_alto' O 'alto'"
+          - "strategic_action == 'Rechazar'"
+          - "weaknesses.length >= 6"
+
+        report:
+          - "Reporte claramente advierte sobre riesgos múltiples"
+          - "Recomendación es enfática sobre no proceder"
+
+    # ========================================================================
+    # TEST ADVERSARIAL 5: Formato No Estándar
+    # ========================================================================
+
+    test_adv_005_non_standard_format:
+      id: "ADV-005"
+      name: "Contrato con formato no estándar"
+      priority: "MEDIO"
+
+      description: >
+        Contrato con información presentada en formato inusual, orden no
+        lógico, términos en diferentes idiomas.
+
+      input:
+        contract_text: |
+          Agreement Date: 1st December 2025
+
+          Las partes del presente acuerdo son:
+          Party A: Global Finance Ltd.
+          Party B: Distribuidora Nacional SA
+
+          El monto (principal amount) será de 800.000,00 EUR
+
+          Interest rate: eight point seven five percent per annum (fijo)
+
+          Plazo: Thirty-six monthly payments
+
+          Apertura fee: 1.5 por ciento
+
+          Hipoteca 1er grado
+
+      expected_behavior:
+        - "Extraer partes a pesar de términos en inglés"
+        - "Normalizar monto de formato europeo (800.000,00) a 800000.00"
+        - "Convertir 'eight point seven five' a 8.75"
+        - "Convertir 'Thirty-six' a 36"
+        - "Identificar idioma mixto pero extraer correctamente"
+
+      success_criteria:
+        extraction:
+          - "lender == 'Global Finance Ltd.'"
+          - "borrower == 'Distribuidora Nacional SA'"
+          - "principal_amount == 800000.00"
+          - "currency == 'EUR'"
+          - "interest_rate.rate == 8.75"
+          - "term_months == 36"
+          - "Todos con confidence >= 0.8"
+
+  # ==========================================================================
+  # CONSISTENCY TESTS (Reproducibilidad)
+  # ==========================================================================
+
+  consistency_tests:
+
+    # ========================================================================
+    # TEST CONSISTENCIA 1: Mismo Contrato, Múltiples Ejecuciones
+    # ========================================================================
+
+    test_cons_001_same_input_multiple_runs:
+      id: "CONS-001"
+      name: "Consistencia en extracción del mismo contrato"
+      priority: "CRÍTICO"
+
+      description: >
+        Ejecutar la extracción del mismo contrato 3 veces y verificar que
+        los resultados son consistentes (overlap >85%).
+
+      input:
+        contract_text: "[Usar test_001_simple_contract]"
+        executions: 3
+
+      expected_behavior:
+        - "Campos críticos idénticos en las 3 ejecuciones"
+        - "Campos opcionales pueden variar ligeramente en confianza"
+        - "Cálculos idénticos (deterministicos)"
+        - "Score de riesgo similar (±3 puntos)"
+
+      success_criteria:
+        - "principal_amount idéntico en 3 ejecuciones"
+        - "interest_rate.rate idéntico en 3 ejecuciones"
+        - "term_months idéntico en 3 ejecuciones"
+        - "TEA idéntico (±0.01%) en 3 ejecuciones"
+        - "CAT idéntico (±0.05%) en 3 ejecuciones"
+        - "score_total varía máximo ±3 puntos entre ejecuciones"
+        - "strategic_action idéntico en 3 ejecuciones"
+        - "Overlap general de campos extraídos >= 85%"
+
+    # ========================================================================
+    # TEST CONSISTENCIA 2: Contratos Similares
+    # ========================================================================
+
+    test_cons_002_similar_contracts:
+      id: "CONS-002"
+      name: "Tratamiento consistente de contratos similares"
+      priority: "ALTO"
+
+      description: >
+        Dos contratos con características muy similares deben recibir
+        evaluaciones de riesgo similares.
+
+      input:
+        contract_a: "[Contrato 1: $1M, 8.5%, 36 meses]"
+        contract_b: "[Contrato 2: $1.05M, 8.6%, 36 meses]"
+
+      expected_behavior:
+        - "Scores de riesgo dentro de ±5 puntos"
+        - "Misma recomendación estratégica"
+        - "Red flags similares (si hay)"
+
+      success_criteria:
+        - "|score_A - score_B| <= 5"
+        - "strategic_action_A == strategic_action_B"
+        - "risk_level_A == risk_level_B"
+
+  # ==========================================================================
+  # CRITERIOS DE APROBACIÓN PARA PRODUCCIÓN
+  # ==========================================================================
+
+  production_readiness_criteria:
+
+    phase_1_initial_testing:
+      description: "Primeros 20 contratos de prueba"
+      requirements:
+        - "Pass rate básico >= 70%"
+        - "Hallucination rate < 10%"
+        - "Cero critical failures"
+      action_if_fail: "Refinar prompts, iterar"
+
+    phase_2_adversarial_testing:
+      description: "10 contratos adversariales"
+      requirements:
+        - "Pass rate >= 60%"
+        - "Manejo apropiado de datos faltantes (sin inventar)"
+        - "Red flags correctamente identificados"
+      action_if_fail: "Mejorar manejo de edge cases"
+
+    phase_3_consistency_testing:
+      description: "5 contratos ejecutados 3 veces cada uno"
+      requirements:
+        - "Consistency score >= 85%"
+        - "Campos críticos 100% consistentes"
+      action_if_fail: "Revisar fuentes de no-determinismo"
+
+    phase_4_integration_testing:
+      description: "20 contratos reales con validación manual"
+      requirements:
+        - "Extraction accuracy >= 95%"
+        - "Calculation accuracy >= 99%"
+        - "Risk assessment usefulness >= 80% (según expertos)"
+      action_if_fail: "Refinamiento fino basado en feedback"
+
+    phase_5_production_pilot:
+      description: "50 contratos en ambiente controlado"
+      requirements:
+        - "Overall pass rate >= 90%"
+        - "Hallucination rate < 5%"
+        - "Cero critical failures en últimos 25 contratos"
+        - "Feedback positivo de usuarios >= 80%"
+      action_if_fail: "Revisión completa antes de lanzamiento"
+
+    minimum_for_production:
+      - "✅ Pass rate >= 90% en suite completo"
+      - "✅ Hallucination rate < 5%"
+      - "✅ Extraction accuracy >= 95%"
+      - "✅ Calculation accuracy >= 99%"
+      - "✅ Consistency score >= 85%"
+      - "✅ Cero critical failures en últimos 50 tests"
+      - "✅ Validación exitosa por 2+ analistas financieros"
+      - "✅ Aprobación de QA lead"
+
+# ============================================================================
+# INSTRUCCIONES DE EJECUCIÓN
+# ============================================================================
+
+execution_instructions:
+
+  manual_testing:
+    step_1: "Ejecutar BASIC tests primero (tests 001-003)"
+    step_2: "Si pass rate < 70%, iterar prompts antes de continuar"
+    step_3: "Ejecutar ADVERSARIAL tests (tests ADV-001 a ADV-005)"
+    step_4: "Documentar TODOS los fallos con detalle"
+    step_5: "Ejecutar CONSISTENCY tests"
+    step_6: "Compilar reporte de métricas"
+
+  automated_testing:
+    note: >
+      CrewAI Studio no tiene framework de testing automatizado integrado.
+      Considerar construir scripts Python externos que:
+      1. Invoquen el crew con inputs de test
+      2. Capturen outputs
+      3. Validen contra success_criteria
+      4. Generen reporte de pass/fail
+
+  regression_testing:
+    note: >
+      Después de cada cambio significativo en prompts:
+      - Re-ejecutar suite completo
+      - Verificar que cambios no rompieron casos previos
+      - Documentar mejoras y regresiones
+
+# ============================================================================
+# FIN DEL TEST SUITE
+# ============================================================================

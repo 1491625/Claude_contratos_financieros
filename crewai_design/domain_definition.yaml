@@ -1,0 +1,312 @@
+# ============================================================================
+# DEFINICIÓN DE DOMINIO: Sistema de Análisis de Contratos de Préstamo
+# ============================================================================
+# Versión: 1.0
+# Fecha: 2025-12-01
+# Basado en: Metodología de 8 Fases para CrewAI Anti-Alucinación
+
+domain:
+  name: "Análisis Automatizado de Contratos de Préstamo"
+
+  description: >
+    Sistema multi-agente que analiza contratos de préstamo en PDF, extrayendo
+    información financiera clave, calculando métricas avanzadas (CAT, TEA, TIR),
+    evaluando riesgos, y generando reportes profesionales con recomendaciones
+    estratégicas (Aceptar/Negociar/Rechazar).
+
+  # ============================================================================
+  # ✅ CAPACIDADES DEL SISTEMA
+  # ============================================================================
+
+  capabilities:
+    extraction:
+      - "Extraer partes del contrato (prestamista, prestatario) con confianza >90%"
+      - "Identificar monto principal y moneda (USD, EUR, MXN)"
+      - "Detectar tipo de tasa (fija/variable) y extraer tasa nominal"
+      - "Extraer plazo en meses y frecuencia de pago (mensual/trimestral/semestral/anual/bullet)"
+      - "Identificar garantías (reales/personales/mixtas) con descripción"
+      - "Extraer comisiones (apertura, mantenimiento, seguros) con valores"
+      - "Detectar cláusulas de prepago con penalizaciones"
+      - "Identificar covenants financieros (DSCR, Deuda/EBITDA, Negative Pledge)"
+      - "Detectar cláusulas de incumplimiento y cross-default"
+      - "Manejar contratos multi-tramo (hasta 5 tramos)"
+      - "Identificar periodo de gracia y estructura bullet"
+      - "Extraer cap y floor para tasas variables"
+
+    financial_calculation:
+      - "Generar tabla de amortización completa (método francés, bullet, con gracia)"
+      - "Calcular CAT (Costo Anual Total) considerando todos los costos"
+      - "Calcular TEA (Tasa Efectiva Anual)"
+      - "Calcular TIR (Tasa Interna de Retorno)"
+      - "Calcular VPN (Valor Presente Neto) del costo de financiamiento"
+      - "Comparar con tasas de mercado por tipo de empresa, plazo y sector"
+      - "Generar análisis de sensibilidad para tasas variables (escenarios ±1%, ±2%)"
+      - "Calcular impacto de escenarios de prepago"
+
+    risk_assessment:
+      - "Evaluar riesgo en 5 categorías (Liquidez, Tasa, Operativo, Legal, Prepago)"
+      - "Asignar score 0-100 ponderado por categoría"
+      - "Identificar red flags (tasa elevada, triggers excesivos, sin cap, etc.)"
+      - "Clasificar nivel de riesgo (Muy Bajo/Bajo/Moderado/Alto/Muy Alto)"
+      - "Generar lista de fortalezas del contrato"
+      - "Generar lista de debilidades y puntos de negociación"
+      - "Proporcionar recomendación estratégica (Aceptar/Negociar/Rechazar)"
+
+    report_generation:
+      - "Generar resumen ejecutivo contextualizado"
+      - "Crear visualizaciones (amortización, distribución costos, radar riesgos)"
+      - "Producir reporte PDF profesional con narrativas dinámicas"
+      - "Exportar datos a Excel con hojas separadas (Resumen, Amortización)"
+
+  # ============================================================================
+  # ❌ LIMITACIONES EXPLÍCITAS
+  # ============================================================================
+
+  limitations:
+    technical:
+      - "No puede leer contratos en formatos no-PDF (Word, imágenes escaneadas sin OCR)"
+      - "No puede extraer datos de tablas complejas con formato irregular"
+      - "No puede interpretar cláusulas escritas en lenguaje excesivamente legal/ambiguo"
+      - "No tiene acceso a bases de datos externas de tasas en tiempo real"
+      - "No puede validar identidad legal de prestamistas/prestatarios"
+
+    functional:
+      - "No puede tomar decisiones finales - solo proporciona recomendaciones"
+      - "No debe aprobar/rechazar contratos sin revisión humana final"
+      - "No puede predecir cambios futuros en índices de referencia (TIIE, EURIBOR)"
+      - "No debe hacer proyecciones de flujo de caja del prestatario"
+      - "No puede evaluar capacidad de pago del prestatario (requiere datos externos)"
+
+    legal_compliance:
+      - "No constituye asesoría legal - requiere validación por abogado"
+      - "No verifica cumplimiento regulatorio específico por jurisdicción"
+      - "No sustituye due diligence legal completa"
+      - "No debe usarse como única fuente para decisiones de crédito >$1M USD"
+
+  # ============================================================================
+  # 📊 MÉTRICAS DE ÉXITO
+  # ============================================================================
+
+  success_metrics:
+    # Precisión de extracción
+    extraction_accuracy_target: 0.95
+    extraction_accuracy_description: "95% de campos críticos extraídos correctamente"
+
+    # Control de alucinaciones
+    hallucination_threshold: 0.05
+    hallucination_description: "Máximo 5% de datos inventados o inferidos incorrectamente"
+
+    # Completitud
+    task_completion_target: 0.90
+    task_completion_description: "90% de contratos procesados completamente sin errores"
+
+    # Consistencia
+    consistency_target: 0.85
+    consistency_description: "85% de overlap en datos extraídos al procesar mismo contrato 2 veces"
+
+    # Calidad de cálculos
+    calculation_accuracy_target: 0.99
+    calculation_accuracy_description: "99% de cálculos financieros correctos (±0.1% de margen)"
+
+    # Utilidad de recomendaciones
+    recommendation_usefulness_target: 0.80
+    recommendation_description: "80% de recomendaciones consideradas útiles por expertos"
+
+  # ============================================================================
+  # 🚨 CRITERIOS DE FALLO CRÍTICO
+  # ============================================================================
+
+  critical_failures:
+    extraction_critical:
+      - "Inventar monto principal cuando no está en el contrato"
+      - "Reportar tasa de interés sin fuente textual verificable"
+      - "Fabricar ArXiv IDs, números de contrato, o identificadores"
+      - "Asignar valores por defecto a campos críticos sin marcarlos como 'asumidos'"
+
+    calculation_critical:
+      - "Generar tabla de amortización con errores matemáticos >1%"
+      - "Reportar CAT/TEA con desviación >0.5% del valor correcto"
+      - "Omitir comisiones o costos en el cálculo del CAT"
+
+    risk_critical:
+      - "Omitir red flags críticos (ej: tasa variable sin cap)"
+      - "Recomendar 'Aceptar' cuando score total <40/100"
+      - "Clasificar riesgo 'Bajo' cuando hay 3+ red flags de severidad alta"
+
+    report_critical:
+      - "Incluir afirmaciones sin evidencia del contrato"
+      - "Usar lenguaje especulativo ('probablemente', 'podría ser', 'tal vez')"
+      - "Generar narrativas contradictorias entre secciones del reporte"
+
+  # ============================================================================
+  # 🎯 CAMPOS CRÍTICOS OBLIGATORIOS
+  # ============================================================================
+
+  critical_fields:
+    tier_1_absolutely_required:
+      - monto_principal
+      - moneda
+      - tasa_nominal
+      - tipo_tasa
+      - plazo_meses
+
+    tier_2_highly_important:
+      - frecuencia_pago
+      - prestamista
+      - prestatario
+      - garantias
+      - comisiones
+
+    tier_3_important:
+      - prepago
+      - covenants
+      - periodo_gracia
+      - es_bullet
+
+  # ============================================================================
+  # 📏 FORMATOS ESTÁNDAR DE DATOS
+  # ============================================================================
+
+  data_formats:
+    montos:
+      format: "Número decimal sin símbolos ni separadores de miles"
+      examples_valid:
+        - "1000000.00"
+        - "50000.50"
+        - "250000"
+      examples_invalid:
+        - "$1,000,000"
+        - "1.000.000,00"
+        - "un millón de dólares"
+
+    tasas_interes:
+      format: "Porcentaje decimal con hasta 2 decimales"
+      examples_valid:
+        - "8.50"
+        - "12.75"
+        - "3.25"
+      examples_invalid:
+        - "0.085"
+        - "8.5%"
+        - "ocho punto cinco por ciento"
+
+    fechas:
+      format: "ISO 8601 (YYYY-MM-DD)"
+      examples_valid:
+        - "2025-12-01"
+        - "2026-06-15"
+      examples_invalid:
+        - "01/12/2025"
+        - "12-01-2025"
+        - "1 de diciembre de 2025"
+
+    monedas:
+      format: "Código ISO 4217 de 3 letras"
+      examples_valid:
+        - "USD"
+        - "EUR"
+        - "MXN"
+      examples_invalid:
+        - "dólares"
+        - "$"
+        - "euros"
+
+    plazos:
+      format: "Número entero de meses"
+      examples_valid:
+        - "12"
+        - "36"
+        - "60"
+      examples_invalid:
+        - "12 meses"
+        - "3 años"
+        - "treinta y seis"
+
+  # ============================================================================
+  # 🔄 FLUJO DE PROCESAMIENTO
+  # ============================================================================
+
+  processing_flow:
+    step_1:
+      name: "Extracción de Datos"
+      agent: "contract_data_extractor"
+      input: "PDF del contrato + texto extraído"
+      output: "JSON estructurado con datos extraídos + nivel de confianza"
+      validation: "Quality inspector verifica precisión y detecta alucinaciones"
+
+    step_2:
+      name: "Cálculos Financieros"
+      agent: "financial_calculator"
+      input: "JSON de datos extraídos del paso 1"
+      output: "JSON con tabla de amortización, CAT, TEA, TIR, VPN, comparación mercado"
+      validation: "Verificar cálculos matemáticos con tolerancia ±0.1%"
+
+    step_3:
+      name: "Evaluación de Riesgos"
+      agent: "risk_evaluator"
+      input: "JSON de datos extraídos + JSON de cálculos financieros"
+      output: "JSON con scores por categoría, red flags, recomendación estratégica"
+      validation: "Verificar consistencia entre scores y recomendación"
+
+    step_4:
+      name: "Síntesis de Reporte"
+      agent: "report_synthesizer"
+      input: "Outputs de los 3 agentes anteriores"
+      output: "Reporte markdown estructurado + JSON para visualizaciones"
+      validation: "Verificar coherencia narrativa y ausencia de contradicciones"
+
+  # ============================================================================
+  # 🧪 ESTRATEGIA DE TESTING
+  # ============================================================================
+
+  testing_strategy:
+    test_contracts:
+      basic_cases:
+        - "Contrato simple: tasa fija, amortización francesa, sin comisiones"
+        - "Contrato estándar: tasa fija, comisiones estándar, garantía hipotecaria"
+        - "Contrato multi-tramo: 2 tramos con tasas diferentes"
+
+      adversarial_cases:
+        - "Contrato con tasa variable sin cap (debe generar red flag)"
+        - "Contrato con datos faltantes (debe marcar como 'No encontrado')"
+        - "Contrato bullet con periodo de gracia (estructura compleja)"
+        - "Contrato con múltiples covenants y cross-default"
+        - "PDF con formato irregular o texto mal estructurado"
+
+      edge_cases:
+        - "Monto en notación científica o con palabras"
+        - "Tasas expresadas de múltiples formas en el mismo contrato"
+        - "Fechas en formatos no estándar"
+        - "Garantías descritas de forma ambigua"
+
+    validation_protocol:
+      manual_review:
+        - "Revisar 100% de extracciones en primeros 10 contratos"
+        - "Validar cálculos contra hoja Excel manual"
+        - "Verificar recomendaciones con analista financiero senior"
+
+      automated_checks:
+        - "Validar formato JSON contra schema"
+        - "Verificar suma de componentes en tabla de amortización"
+        - "Confirmar consistencia entre scores y nivel de riesgo"
+
+  # ============================================================================
+  # 📈 CRITERIOS DE PRODUCCIÓN
+  # ============================================================================
+
+  production_readiness:
+    requirements:
+      - "Pass rate >90% en test suite completo (basic + adversarial + edge)"
+      - "Hallucination rate <5% verificado en 20+ contratos reales"
+      - "Calculation accuracy >99% validado contra Excel"
+      - "0 critical failures en últimos 50 contratos procesados"
+      - "Validación por 2+ analistas financieros seniors"
+
+    monitoring:
+      - "Auditoría manual de 10% de contratos procesados"
+      - "Reporte mensual de métricas de precisión"
+      - "Review trimestral de casos fallidos"
+
+# ============================================================================
+# FIN DE DEFINICIÓN DE DOMINIO
+# ============================================================================
